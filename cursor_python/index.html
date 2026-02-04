@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ping-Pong</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #0f1923;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    h1 {
+      color: #c8c8c8;
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .controls {
+      color: #888;
+      font-size: 0.85rem;
+      margin-bottom: 0.75rem;
+    }
+    #canvas {
+      display: block;
+      background: #0f1923;
+      border: 2px solid #2a3a4a;
+      border-radius: 4px;
+    }
+    #menu {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 25, 35, 0.95);
+      z-index: 10;
+    }
+    #menu.hidden { display: none; }
+    #menu h2 {
+      color: #c8c8c8;
+      font-size: 1.5rem;
+      margin-bottom: 1.5rem;
+      font-weight: 600;
+    }
+    .menu-btn {
+      display: block;
+      width: 260px;
+      padding: 12px 24px;
+      margin: 8px 0;
+      font-size: 1rem;
+      color: #0f1923;
+      background: #dcdcdc;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .menu-btn:hover {
+      background: #fff;
+    }
+    .pause-btn {
+      margin-top: 0.75rem;
+      padding: 8px 20px;
+      font-size: 0.9rem;
+      color: #0f1923;
+      background: #888;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .pause-btn:hover { background: #aaa; }
+    .pause-btn.paused { background: #4a9; color: #fff; }
+  </style>
+</head>
+<body>
+  <div id="menu">
+    <h2>Choose mode</h2>
+    <button class="menu-btn" id="btn1p">1 Player (vs Computer)</button>
+    <button class="menu-btn" id="btn2p">2 Players</button>
+  </div>
+  <h1>Ping-Pong</h1>
+  <p class="controls" id="controlsText">Player 1: W / S &nbsp;|&nbsp; Player 2: ↑ / ↓</p>
+  <canvas id="canvas" width="800" height="500"></canvas>
+  <button class="pause-btn" id="pauseBtn" disabled>Pause (P)</button>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    const WIDTH = 800;
+    const HEIGHT = 500;
+    const PADDLE_WIDTH = 12;
+    const PADDLE_HEIGHT = 80;
+    const PADDLE_SPEED = 8;
+    const BALL_SIZE = 12;
+    const BALL_SPEED = 6;
+    const FPS = 60;
+
+    const BG = '#0f1923';
+    const PADDLE_COLOR = '#dcdcdc';
+    const BALL_COLOR = '#ffffff';
+    const TEXT_COLOR = '#c8c8c8';
+    const LINE_COLOR = '#3c4650';
+
+    let paddle1 = { x: 30, y: HEIGHT / 2 - PADDLE_HEIGHT / 2, w: PADDLE_WIDTH, h: PADDLE_HEIGHT };
+    let paddle2 = { x: WIDTH - 30 - PADDLE_WIDTH, y: HEIGHT / 2 - PADDLE_HEIGHT / 2, w: PADDLE_WIDTH, h: PADDLE_HEIGHT };
+    let ball = { x: WIDTH / 2 - BALL_SIZE / 2, y: HEIGHT / 2 - BALL_SIZE / 2, size: BALL_SIZE };
+    let ballDx = BALL_SPEED;
+    let ballDy = 0;
+    let score1 = 0;
+    let score2 = 0;
+    let singlePlayer = false;
+    let paused = false;
+    let gameStarted = false;
+    const AI_SPEED = 6;
+
+    const keys = {};
+    window.addEventListener('keydown', e => {
+      keys[e.key] = true;
+      if (gameStarted && (e.key === 'p' || e.key === ' ') && !e.repeat) {
+        paused = !paused;
+        document.getElementById('pauseBtn').textContent = paused ? 'Resume (P)' : 'Pause (P)';
+        document.getElementById('pauseBtn').classList.toggle('paused', paused);
+        e.preventDefault();
+      }
+      if (e.key === 'p' || e.key === ' ') e.preventDefault();
+    });
+    window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+    function resetBall(direction = 1) {
+      ball.x = WIDTH / 2 - BALL_SIZE / 2;
+      ball.y = HEIGHT / 2 - BALL_SIZE / 2;
+      ballDx = BALL_SPEED * direction;
+      ballDy = 0;
+    }
+
+    function draw() {
+      ctx.fillStyle = BG;
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+      for (let y = 0; y < HEIGHT; y += 24) {
+        ctx.fillStyle = LINE_COLOR;
+        ctx.fillRect(WIDTH / 2 - 2, y, 4, 12);
+      }
+
+      ctx.fillStyle = PADDLE_COLOR;
+      ctx.fillRect(paddle1.x, paddle1.y, paddle1.w, paddle1.h);
+      ctx.fillRect(paddle2.x, paddle2.y, paddle2.w, paddle2.h);
+
+      ctx.fillStyle = BALL_COLOR;
+      ctx.beginPath();
+      ctx.ellipse(ball.x + ball.size / 2, ball.y + ball.size / 2, ball.size / 2, ball.size / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = TEXT_COLOR;
+      ctx.font = '48px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(score1, WIDTH / 4, 50);
+      ctx.fillText(score2, (3 * WIDTH) / 4, 50);
+
+      if (paused) {
+        ctx.fillStyle = 'rgba(15, 25, 35, 0.7)';
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+        ctx.fillStyle = '#c8c8c8';
+        ctx.font = '48px system-ui, sans-serif';
+        ctx.fillText('Paused', WIDTH / 2, HEIGHT / 2);
+      }
+    }
+
+    function moveComputerPaddle() {
+      const targetY = ball.y + ball.size / 2 - paddle2.h / 2;
+      const diff = targetY - paddle2.y;
+      const move = Math.max(-AI_SPEED, Math.min(AI_SPEED, diff));
+      paddle2.y += move;
+      if (paddle2.y < 0) paddle2.y = 0;
+      if (paddle2.y + paddle2.h > HEIGHT) paddle2.y = HEIGHT - paddle2.h;
+    }
+
+    function update() {
+      if (keys['w'] && paddle1.y > 0) paddle1.y -= PADDLE_SPEED;
+      if (keys['s'] && paddle1.y + paddle1.h < HEIGHT) paddle1.y += PADDLE_SPEED;
+      if (singlePlayer) {
+        moveComputerPaddle();
+      } else {
+        if (keys['ArrowUp'] && paddle2.y > 0) paddle2.y -= PADDLE_SPEED;
+        if (keys['ArrowDown'] && paddle2.y + paddle2.h < HEIGHT) paddle2.y += PADDLE_SPEED;
+      }
+
+      ball.x += ballDx;
+      ball.y += ballDy;
+
+      if (ball.y <= 0) {
+        ball.y = 0;
+        ballDy = Math.abs(ballDy);
+      }
+      if (ball.y + ball.size >= HEIGHT) {
+        ball.y = HEIGHT - ball.size;
+        ballDy = -Math.abs(ballDy);
+      }
+
+      if (ball.x < paddle1.x + paddle1.w && ball.x + ball.size > paddle1.x &&
+          ball.y + ball.size > paddle1.y && ball.y < paddle1.y + paddle1.h) {
+        ball.x = paddle1.x + paddle1.w;
+        ballDx = Math.abs(ballDx);
+        const hitPos = (ball.y + ball.size / 2 - paddle1.y - paddle1.h / 2) / (paddle1.h / 2);
+        ballDy = hitPos * (BALL_SPEED * 0.8);
+      }
+      if (ball.x + ball.size > paddle2.x && ball.x < paddle2.x + paddle2.w &&
+          ball.y + ball.size > paddle2.y && ball.y < paddle2.y + paddle2.h) {
+        ball.x = paddle2.x - ball.size;
+        ballDx = -Math.abs(ballDx);
+        const hitPos = (ball.y + ball.size / 2 - paddle2.y - paddle2.h / 2) / (paddle2.h / 2);
+        ballDy = hitPos * (BALL_SPEED * 0.8);
+      }
+
+      if (ball.x + ball.size <= 0) {
+        score2++;
+        resetBall(-1);
+      }
+      if (ball.x >= WIDTH) {
+        score1++;
+        resetBall(1);
+      }
+    }
+
+    function gameLoop() {
+      if (!paused) update();
+      draw();
+    }
+
+    let gameInterval = null;
+
+    function startGame(vsComputer) {
+      singlePlayer = vsComputer;
+      gameStarted = true;
+      paused = false;
+      document.getElementById('menu').classList.add('hidden');
+      document.getElementById('controlsText').textContent = vsComputer
+        ? 'You: W / S  —  Computer (right)  |  Pause: P'
+        : 'Player 1: W / S  |  Player 2: ↑ / ↓  |  Pause: P';
+      document.getElementById('pauseBtn').disabled = false;
+      document.getElementById('pauseBtn').textContent = 'Pause (P)';
+      document.getElementById('pauseBtn').classList.remove('paused');
+      score1 = 0;
+      score2 = 0;
+      paddle1.y = HEIGHT / 2 - PADDLE_HEIGHT / 2;
+      paddle2.y = HEIGHT / 2 - PADDLE_HEIGHT / 2;
+      resetBall(1);
+      if (!gameInterval) gameInterval = setInterval(gameLoop, 1000 / FPS);
+    }
+
+    document.getElementById('btn1p').addEventListener('click', () => startGame(true));
+    document.getElementById('btn2p').addEventListener('click', () => startGame(false));
+    document.getElementById('pauseBtn').addEventListener('click', () => {
+      if (!gameStarted) return;
+      paused = !paused;
+      document.getElementById('pauseBtn').textContent = paused ? 'Resume (P)' : 'Pause (P)';
+      document.getElementById('pauseBtn').classList.toggle('paused', paused);
+    });
+  </script>
+</body>
+</html>
