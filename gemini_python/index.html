@@ -1,0 +1,207 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ping-Pong by Gemini</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #121212;
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        canvas {
+            background-color: #000;
+            border: 2px solid white;
+        }
+        .controls {
+            position: absolute;
+            top: 20px;
+            font-size: 1.2em;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">Player 1: Use 'W' (up) and 'S' (down)</div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const context = canvas.getContext('2d');
+
+        // --- Constants ---
+        const SCREEN_WIDTH = 800;
+        const SCREEN_HEIGHT = 600;
+        const PADDLE_WIDTH = 15;
+        const PADDLE_HEIGHT = 100;
+        const BALL_RADIUS = 10;
+        const PLAYER_PADDLE_SPEED = 7;
+        const AI_PADDLE_SPEED = 6;
+        let BALL_SPEED_X = 7;
+        let BALL_SPEED_Y = 7;
+
+        // Set canvas dimensions
+        canvas.width = SCREEN_WIDTH;
+        canvas.height = SCREEN_HEIGHT;
+
+        // --- Game Objects (using objects instead of Rects) ---
+        const player = {
+            x: 30,
+            y: SCREEN_HEIGHT / 2 - PADDLE_HEIGHT / 2,
+            width: PADDLE_WIDTH,
+            height: PADDLE_HEIGHT,
+            dy: 0 // Change in y direction
+        };
+
+        const opponent = {
+            x: SCREEN_WIDTH - 30 - PADDLE_WIDTH,
+            y: SCREEN_HEIGHT / 2 - PADDLE_HEIGHT / 2,
+            width: PADDLE_WIDTH,
+            height: PADDLE_HEIGHT
+        };
+
+        const ball = {
+            x: SCREEN_WIDTH / 2,
+            y: SCREEN_HEIGHT / 2,
+            radius: BALL_RADIUS,
+            dx: BALL_SPEED_X * (Math.random() > 0.5 ? 1 : -1),
+            dy: BALL_SPEED_Y * (Math.random() > 0.5 ? 1 : -1)
+        };
+        
+        // --- Game Variables ---
+        let playerScore = 0;
+        let opponentScore = 0;
+
+        function resetBall() {
+            ball.x = SCREEN_WIDTH / 2;
+            ball.y = SCREEN_HEIGHT / 2;
+            ball.dx = BALL_SPEED_X * (Math.random() > 0.5 ? 1 : -1);
+            ball.dy = BALL_SPEED_Y * (Math.random() > 0.5 ? 1 : -1);
+        }
+
+        // --- Input Handling ---
+        const keysPressed = {};
+        window.addEventListener('keydown', (e) => {
+            keysPressed[e.key.toLowerCase()] = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            keysPressed[e.key.toLowerCase()] = false;
+        });
+
+        function handlePlayerInput() {
+            player.dy = 0;
+            if (keysPressed['w']) {
+                player.dy = -PLAYER_PADDLE_SPEED;
+            }
+            if (keysPressed['s']) {
+                player.dy = PLAYER_PADDLE_SPEED;
+            }
+        }
+        
+        function update() {
+            handlePlayerInput();
+            
+            // Move player paddle
+            player.y += player.dy;
+
+            // Player paddle boundary
+            if (player.y < 0) player.y = 0;
+            if (player.y + PADDLE_HEIGHT > SCREEN_HEIGHT) player.y = SCREEN_HEIGHT - PADDLE_HEIGHT;
+
+            // AI Opponent Logic
+            const paddleCenter = opponent.y + PADDLE_HEIGHT / 2;
+            if (paddleCenter < ball.y - 10) {
+                 opponent.y += AI_PADDLE_SPEED;
+            } else if (paddleCenter > ball.y + 10) {
+                 opponent.y -= AI_PADDLE_SPEED;
+            }
+            if (opponent.y < 0) opponent.y = 0;
+            if (opponent.y + PADDLE_HEIGHT > SCREEN_HEIGHT) opponent.y = SCREEN_HEIGHT - PADDLE_HEIGHT;
+
+
+            // Move ball
+            ball.x += ball.dx;
+            ball.y += ball.dy;
+
+            // Wall collision (top/bottom)
+            if (ball.y - ball.radius < 0 || ball.y + ball.radius > SCREEN_HEIGHT) {
+                ball.dy *= -1;
+            }
+
+            // Paddle collision
+            // Player
+            if (ball.x - ball.radius < player.x + player.width &&
+                ball.y > player.y &&
+                ball.y < player.y + player.height) {
+                ball.dx *= -1.05; // Reverse and speed up
+            }
+            // Opponent
+            if (ball.x + ball.radius > opponent.x &&
+                ball.y > opponent.y &&
+                ball.y < opponent.y + opponent.height) {
+                ball.dx *= -1.05; // Reverse and speed up
+            }
+
+            // Scoring
+            if (ball.x - ball.radius < 0) {
+                opponentScore++;
+                resetBall();
+            }
+            if (ball.x + ball.radius > SCREEN_WIDTH) {
+                playerScore++;
+                resetBall();
+            }
+        }
+
+        function draw() {
+            // Clear screen
+            context.fillStyle = 'black';
+            context.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+            // Set draw color
+            context.fillStyle = 'white';
+
+            // Draw paddles
+            context.fillRect(player.x, player.y, player.width, player.height);
+            context.fillRect(opponent.x, opponent.y, opponent.width, opponent.height);
+
+            // Draw ball
+            context.beginPath();
+            context.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            context.fill();
+
+            // Draw middle line
+            context.beginPath();
+            context.setLineDash([10, 10]);
+            context.moveTo(SCREEN_WIDTH / 2, 0);
+            context.lineTo(SCREEN_WIDTH / 2, SCREEN_HEIGHT);
+            context.strokeStyle = 'white';
+            context.lineWidth = 2;
+            context.stroke();
+            context.setLineDash([]);
+
+
+            // Draw scores
+            context.font = '74px "Courier New", Courier, monospace';
+            context.fillText(playerScore, SCREEN_WIDTH / 4, 80);
+            context.fillText(opponentScore, (SCREEN_WIDTH * 3) / 4, 80);
+        }
+
+        // --- Main Game Loop ---
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop); // Loop forever
+        }
+
+        // Start the game
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
